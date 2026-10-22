@@ -29,6 +29,11 @@ ENV/
 *.swo
 *~
 
+# ===== AI 辅助工具的本地配置 =====
+.claude/
+.cursor/
+.aider*
+
 # ===== 向量库（可通过 data/ 重新构建，勿入库）=====
 chroma_db/
 **/chroma_db/
