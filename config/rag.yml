@@ -1,0 +1,5 @@
+# 模型配置
+# 注意：API Key 不要写在这里，改为在项目根目录的 .env 文件中配置
+# 参考 .env.example
+chat_model_name: qwen-plus
+embedding_model_name: text-embedding-v3
