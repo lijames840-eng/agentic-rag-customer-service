@@ -15,7 +15,9 @@ class VectorStoreService:
         self.vector_store = Chroma(
             collection_name=chroma_conf["collection_name"],
             embedding_function=embed_model,
-            persist_directory=chroma_conf["persist_directory"],
+            # 必须转成绝对路径：否则 Chroma 按「当前工作目录」解析，
+            # 从非项目目录运行时会连到一个全新的空库（其余同理）
+            persist_directory=get_abs_path(chroma_conf["persist_directory"]),
         )
 
         self.splitter = RecursiveCharacterTextSplitter(
