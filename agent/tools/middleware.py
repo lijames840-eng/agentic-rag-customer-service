@@ -3,7 +3,7 @@ from typing import Callable
 from langchain.agents import AgentState
 from langchain.agents.middleware import wrap_tool_call, before_model, ModelRequest, dynamic_prompt
 from langchain.tools.tool_node import ToolCallRequest
-from langchain_core.messages import ToolMessage
+from langchain_core.messages import HumanMessage, ToolMessage
 from langgraph.runtime import Runtime
 from langgraph.types import Command
 from utils.logger_handler import logger
@@ -44,8 +44,36 @@ def log_before_model(
 
 @dynamic_prompt  # 每一次在生成提示词之前，调用此函数
 def report_prompt_switch(request: ModelRequest):  # 动态切换提示词
-    is_report = request.runtime.context.get("report", False)
-    if is_report:
-        # 是报告生成场景，返回报告生成提示词内容
+    # 第一优先级：本次调用内 middleware 写入的运行时标记
+    if request.runtime.context.get("report", False):
         return load_report_prompts()
+
+    # 第二优先级：从历史消息里回溯本轮是否已触发过报告信号
+    # 这样在「多轮对话 + checkpointer」场景下，报告角色仍能在本轮内延续
+    if _report_triggered_in_current_turn(request):
+        return load_report_prompts()
+
     return load_system_prompts()
+
+
+def _report_triggered_in_current_turn(request: ModelRequest) -> bool:
+    """判断「本轮对话」中是否已经调用过 fill_context_for_report。
+
+    关键点是作用范围：只看最后一条 HumanMessage 之后的消息。
+    这样上一轮生成过报告，不会污染这一轮的普通咨询——角色切换的生命周期
+    被限定在一轮问答之内，天然避免了状态残留。
+    """
+    state = getattr(request, "state", None) or {}
+    messages = state.get("messages", []) if isinstance(state, dict) else []
+
+    # 找到本轮起点：最后一条用户消息的位置
+    last_human_index = -1
+    for index, message in enumerate(messages):
+        if isinstance(message, HumanMessage):
+            last_human_index = index
+
+    # 只看本轮产生的消息，历史轮次里的报告信号不生效
+    for message in messages[last_human_index + 1:]:
+        if isinstance(message, ToolMessage) and message.name == "fill_context_for_report":
+            return True
+    return False
